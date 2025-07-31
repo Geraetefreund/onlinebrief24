@@ -44,14 +44,13 @@ class onlinebrief24API:
         response = requests.get(url, headers=self.headers, json=self.payload_auth)
         return f'Balance: {response.json()['data']['balance']} EUR'
 
-    def invoices(self):
+    def list_invoices(self):
         url = self.base_url + '/invoices'
         response = requests.get(url, headers=self.headers, json=self.payload_auth)
         invoices = response.json()['data']['invoices']
         print('There are currently {len(invoices} invoices.')
         for inv in invoices:
             print(f'id: {inv['id']}, invoice date: {inv['invoice_date'].split(' ')[0]}')
-        #return response.json()['data']['invoices']
 
     def get_invoice(self, invoice_id):
         url = self.base_url + f'/invoices/{invoice_id}'
@@ -63,7 +62,6 @@ class onlinebrief24API:
         with open(pdf_filename, "wb") as file:
             file.write(pdf_data)
             print(f'✅ Invoice successfully saved: {pdf_filename}')
-        #return response.json()
     
     def open_pdf(self, pdf_filename):
         with open(f'{pdf_filename}', 'rb') as file:
@@ -78,7 +76,7 @@ class onlinebrief24API:
         md5_checksum = hashlib.md5(base64_data.encode('utf-8')).hexdigest()
         return md5_checksum
 
-    def send_letter(self, pdf_filename):
+    def send_letter(self, pdf_filename, mode='live'):
         pdf_data = self.open_pdf(pdf_filename)
         base64_encoded = self.base64_encode(pdf_data)
         md5_checksum = self.md5_checksum(base64_encoded)
@@ -95,10 +93,57 @@ class onlinebrief24API:
                     "shipping": "auto"
                 }
             }
-        }        
+        }
+        
+        payload['auth']['mode'] = mode
+        
         response = requests.post(f"{self.base_url}/printjobs", headers=self.headers, json=payload)
 
-        return response
+        if response.status_code == 200:
+            print(f'✅ Letter successfully submitted.')
+
+            items = response.json()['data']['items'][0]
+            print(f'Status: {items['status']}')
+            print(f'Address: {items['address']}')
+            print(f'Cost: {items['amount'] + items['vat']} EUR')
+            print(self.balance())
+           
+        else:
+            print(f'Response status code: {response.status_code}')
+            return response.json()
+
+    def list_printjobs(self, filter='all'):
+        url = self.base_url + '/printjobs'
+        match filter :
+            case 'all':
+                print('filter: all')
+            case 'hold': # angehaltene Auftraege
+                print('filter: hold')
+                url += '?filter=hold'
+            case 'done': # verarbeitete Auftraege
+                print('filter: done')
+                url += '?filter=done'
+            case 'draft': # Aufträge im Warenkorb
+                print('filter: draft')
+                url += '?filter=draft'
+                print(url)
+            case 'queue': # Aufträge in der Warteschlange
+                print('filter: queue')
+                url += '?filter=queue'
+            case 'canceled': # Aufträge in der Warteschlange
+                print('filter: canceled')
+                url += '?filter=canceled'
+            case _:
+                print(f'ERROR: unrecognized filter: {filter}')
+
+    def delete_printjob(self, id):
+        pass
+
+
+def main():
+    pass
 
 if __name__ == '__main__':
     ob = onlinebrief24API()
+    main()
+
