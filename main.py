@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class onlinebrief24API:
+class OnlineBrief24API:
 
     def __init__(self):
         self.api_key = os.getenv("API_KEY")
@@ -42,15 +42,14 @@ class onlinebrief24API:
     def balance(self):
         url = self.base_url + '/balance'
         response = requests.get(url, headers=self.headers, json=self.payload_auth)
-        return f'Balance: {response.json()['data']['balance']} EUR'
+        return f"Balance: {response.json()['data']['balance']} EUR"
 
     def list_invoices(self):
         url = self.base_url + '/invoices'
         response = requests.get(url, headers=self.headers, json=self.payload_auth)
         invoices = response.json()['data']['invoices']
-        print('There are currently {len(invoices} invoices.')
         for inv in invoices:
-            print(f'id: {inv['id']}, invoice date: {inv['invoice_date'].split(' ')[0]}')
+            print(f"id: {inv['id']}, invoice date: {inv['invoice_date'].split(' ')[0]}")
 
     def get_invoice(self, invoice_id):
         url = self.base_url + f'/invoices/{invoice_id}'
@@ -61,7 +60,7 @@ class onlinebrief24API:
         pdf_filename = f"ob24-Rechnung-{invoice_date}.pdf"
         with open(pdf_filename, "wb") as file:
             file.write(pdf_data)
-            print(f'✅ Invoice successfully saved: {pdf_filename}')
+            print(f'Invoice successfully saved: {pdf_filename}')
     
     def open_pdf(self, pdf_filename):
         with open(f'{pdf_filename}', 'rb') as file:
@@ -69,12 +68,10 @@ class onlinebrief24API:
         return pdf_data
 
     def base64_encode(self, pdf_data):
-        base64_encoded = base64.b64encode(pdf_data).decode("utf8")
-        return base64_encoded
+        return base64.b64encode(pdf_data).decode("utf8")
 
     def md5_checksum(self, base64_data):
-        md5_checksum = hashlib.md5(base64_data.encode('utf-8')).hexdigest()
-        return md5_checksum
+        return hashlib.md5(base64_data.encode('utf-8')).hexdigest()
 
     def send_letter(self, pdf_filename, mode='live'):
         pdf_data = self.open_pdf(pdf_filename)
@@ -100,12 +97,12 @@ class onlinebrief24API:
         response = requests.post(f"{self.base_url}/printjobs", headers=self.headers, json=payload)
 
         if response.status_code == 200:
-            print(f'✅ Letter successfully submitted.')
+            print(f'Letter successfully submitted.')
 
             items = response.json()['data']['items'][0]
-            print(f'Status: {items['status']}')
-            print(f'Address: {items['address']}')
-            print(f'Cost: {items['amount'] + items['vat']} EUR')
+            print(f"Status: {items['status']}")
+            print(f"Address: {items['address']}")
+            print(f"Cost: {items['amount'] + items['vat']} EUR")
             print(self.balance())
            
         else:
@@ -126,7 +123,6 @@ class onlinebrief24API:
             case 'draft': # Aufträge im Warenkorb
                 print('filter: draft')
                 url += '?filter=draft'
-                print(url)
             case 'queue': # Aufträge in der Warteschlange
                 print('filter: queue')
                 url += '?filter=queue'
@@ -135,15 +131,26 @@ class onlinebrief24API:
                 url += '?filter=canceled'
             case _:
                 print(f'ERROR: unrecognized filter: {filter}')
+            
+        response = requests.get(url, json=self.payload_auth)
+        data = response.json()['data']['printjobs']
+        return data
+
 
     def delete_printjob(self, id):
-        pass
+        url = self.base_url + f'/printjobs/{id}'
+        response = requests.delete(url, json=self.payload_auth)
+        return response.json()
 
+    def transactions(self, filter='payins'):
+        url = self.base_url + f'/transactions?{filter}'
+        response = requests.get(url, json=self.payload_auth)
+        if response.status_code == 200:
+            return response.json()['data']['transactions']
 
 def main():
-    pass
+    print(api.balance())
 
 if __name__ == '__main__':
-    ob = onlinebrief24API()
+    api = OnlineBrief24API()
     main()
-
