@@ -39,14 +39,28 @@ class OnlineBrief24API:
                 }
         }
 
+    def request_get(self, url, payload):
+        """ DRY: try/except in separate method for looking tidy"""
+        try:
+            response = requests.get(url, json=payload)
+            if response.status_code == 200:
+                return response
+            else:
+                print(f'ERROR: {response.status_code}')
+        except Exception as e:
+            print(f'request_get: ERROR: {e}')
+            return response.json()
+
     def balance(self):
         url = self.base_url + '/balance'
-        response = requests.get(url, headers=self.headers, json=self.payload_auth)
+        #response = requests.get(url, headers=self.headers, json=self.payload_auth)
+        response = self.request_get(url, self.payload_auth)
         return f"Balance: {response.json()['data']['balance']} EUR"
 
     def list_invoices(self):
         url = self.base_url + '/invoices'
-        response = requests.get(url, headers=self.headers, json=self.payload_auth)
+        response = self.request_get(url, self.payload_auth)
+        #response = requests.get(url, headers=self.headers, json=self.payload_auth)
         invoices = response.json()['data']['invoices']
         for inv in invoices:
             print(f"id: {inv['id']}, invoice date: {inv['invoice_date'].split(' ')[0]}")
@@ -137,7 +151,7 @@ class OnlineBrief24API:
         return data
 
 
-    def delete_printjob(self, id):
+    def delete_printjob(self, id): # int
         url = self.base_url + f'/printjobs/{id}'
         response = requests.delete(url, json=self.payload_auth)
         return response.json()
