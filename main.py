@@ -53,33 +53,38 @@ class OnlineBrief24API:
 
     def balance(self):
         url = self.base_url + '/balance'
-        #response = requests.get(url, headers=self.headers, json=self.payload_auth)
         response = self.request_get(url, self.payload_auth)
         return f"Balance: {response.json()['data']['balance']} EUR"
 
     def list_invoices(self):
         url = self.base_url + '/invoices'
         response = self.request_get(url, self.payload_auth)
-        #response = requests.get(url, headers=self.headers, json=self.payload_auth)
         invoices = response.json()['data']['invoices']
         for inv in invoices:
             print(f"id: {inv['id']}, invoice date: {inv['invoice_date'].split(' ')[0]}")
 
     def get_invoice(self, invoice_id):
         url = self.base_url + f'/invoices/{invoice_id}'
-        response = requests.get(url, headers=self.headers, json=self.payload_auth)
+        response = self.request_get(url, self.payload_auth)
         invoice_date = response.json()['data']['invoice_date'].split(' ')[0]
         base64_data = response.json()['data']['base64_data']
         pdf_data = base64.b64decode(base64_data)
         pdf_filename = f"ob24-Rechnung-{invoice_date}.pdf"
-        with open(pdf_filename, "wb") as file:
-            file.write(pdf_data)
-            print(f'Invoice successfully saved: {pdf_filename}')
+        try:
+            with open(pdf_filename, "wb") as file:
+                file.write(pdf_data)
+                print(f'Invoice successfully saved: {pdf_filename}')
+        except Exception as e:
+            return f"Error: Exception as {e}"
     
     def open_pdf(self, pdf_filename):
-        with open(f'{pdf_filename}', 'rb') as file:
-            pdf_data = file.read()
-        return pdf_data
+        try:
+            with open(f'{pdf_filename}', 'rb') as file:
+                pdf_data = file.read()
+            return pdf_data
+        except Exception as e:
+                print(f"ERROR: Exception {e}")
+                return None
 
     def base64_encode(self, pdf_data):
         return base64.b64encode(pdf_data).decode("utf8")
@@ -108,10 +113,14 @@ class OnlineBrief24API:
         
         payload['auth']['mode'] = mode
         
-        response = requests.post(f"{self.base_url}/printjobs", headers=self.headers, json=payload)
+        try:
+            response = requests.post(f"{self.base_url}/printjobs", json=payload)
+        except Exception as e:
+            print(f"Error: Exception: {e}")
+            return response.json()
 
         if response.status_code == 200:
-            print(f'Letter successfully submitted.')
+            print(f'Letter submitted successfully.')
 
             items = response.json()['data']['items'][0]
             print(f"Status: {items['status']}")
@@ -146,21 +155,24 @@ class OnlineBrief24API:
             case _:
                 print(f'ERROR: unrecognized filter: {filter}')
             
-        response = requests.get(url, json=self.payload_auth)
+        response = self.request_get(url, self.payload_auth)
         data = response.json()['data']['printjobs']
         return data
 
 
     def delete_printjob(self, id): # int
         url = self.base_url + f'/printjobs/{id}'
-        response = requests.delete(url, json=self.payload_auth)
+        try:
+            response = requests.delete(url, json=self.payload_auth)
+        except Exception as e:
+            print(f"Error: Exception: {e}")
+            return response.json()
         return response.json()
 
     def transactions(self, filter='payins'):
         url = self.base_url + f'/transactions?{filter}'
-        response = requests.get(url, json=self.payload_auth)
-        if response.status_code == 200:
-            return response.json()['data']['transactions']
+        response = self.request_get(url, self.payload_auth)
+        return response
 
 def main():
     print(api.balance())
