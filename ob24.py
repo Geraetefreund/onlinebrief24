@@ -163,13 +163,34 @@ class OnlineBrief24API:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Send letters and manage printjobs via OnlineBrief24 CLI Tool',
-        prog = 'ob24'
+        prog = 'ob24',
+        description= """
+Send letters and manage printjobs via OnlineBrief24 CLI Tool
+Examples:
+  ob24 <command> -h
+  ob24 send my_letter.pdf --color --duplex (default: b&w, simplex)
+  ob24 balance 
+  ob24 invoices list --last 3 (default: all)
+  ob24 printjobs list -f draft
+  ob24 printjobs delete <id>
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+    subparsers = parser.add_subparsers(
+        title='Availabe commands',
+        dest='command',
+        required=True,
+        metavar = ''
     )
 
-    subparsers = parser.add_subparsers(dest='command', required=True)
+    send_parser = subparsers.add_parser(
+        'send',
+        help = 'Send a letter',
+        description='Send a PDF letter via OnlineBrief24.de',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
-    send_parser = subparsers.add_parser('send', help = 'Send a letter')
     send_parser.add_argument('filename', help='PDF file to send')
     send_parser.add_argument('-m', '--mode', choices=['live', 'test'], default='live', help='use test for debug')
     send_parser.add_argument('--color', action='store_true', help=' Enable color printing. (Default is b&w)')
@@ -187,7 +208,7 @@ def main():
 
     invoices_list = invoices_subparsers.add_parser('list', help='List invoices')
     invoices_list.add_argument(
-        '-n', '--number',
+        '-l', '--last',
         type = int,
         default = None,
         help = 'Only show the last N invocies'
@@ -241,8 +262,8 @@ def main():
     elif args.command == 'invoices':
         if args.invoices_command == 'list':
             invoices = api.list_invoices()
-            if args.number:
-                invoices = invoices[:args.number]
+            if args.last:
+                invoices = invoices[:args.last]
             print(json.dumps(invoices, indent=2))
         elif args.invoices_command == 'get':
             api.get_invoice(args.id)
