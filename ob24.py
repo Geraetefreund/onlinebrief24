@@ -30,7 +30,6 @@ class OnlineBrief24API:
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv('API_SECRET')
         self.base_url = "https://api.onlinebrief24.de/v1"
-        self.headers = { 'Content-Type': 'application/json' }
         self.payload_auth = {
             'auth': {
                 'apiKey': f'{self.api_key}',
@@ -39,9 +38,13 @@ class OnlineBrief24API:
                 }
         }
 
-    def open_pdf(self, pdf_filename):
+        if not self.api_key or not self.api_secret:
+            print('ERROR: API credentials missing in .env')
+            sys.exit(1)
+
+    def open_pdf(self, filename):
         try:
-            with open(f'{pdf_filename}', 'rb') as file:
+            with open(filename, 'rb') as file:
                 pdf_data = file.read()
             return pdf_data
         except Exception as e:
@@ -54,31 +57,28 @@ class OnlineBrief24API:
     def md5_checksum(self, base64_data):
         return hashlib.md5(base64_data.encode('utf-8')).hexdigest()
 
-    def request_get(self, url, payload):
-        """ DRY: try/except in separate method for looking tidy"""
+    def request(self, method, url, payload):
         try:
-            response = requests.get(url, json=payload)
-            if response.status_code == 200:
-                return response
-            else:
-                print(f'ERROR: {response.status_code}')
-                return response.json()
-        except Exception as e:
-            print(f'request_get: ERROR: {e}')
+            response = requests.request(method, url, json=payload)
+            response.raise_for_status()
+            return response
+        except requests.RequestException as e:
+            print(f'Request error: {e}')
+            return None
 
     def balance(self):
         url = self.base_url + '/balance'
-        response = self.request_get(url, self.payload_auth)
+        response = self.request('get', url, self.payload_auth)
         return response.json()['data']['balance']
 
     def list_invoices(self):
         url = self.base_url + '/invoices'
-        response = self.request_get(url, self.payload_auth)
+        response = self.request('get', url, self.payload_auth)
         return response.json()['data']['invoices']
         
     def get_invoice(self, invoice_id):
         url = self.base_url + f'/invoices/{invoice_id}'
-        response = self.request_get(url, self.payload_auth)
+        response = self.request('get', url, self.payload_auth)
         invoice_date = response.json()['data']['invoice_date'].split(' ')[0]
         base64_data = response.json()['data']['base64_data']
         pdf_data = base64.b64decode(base64_data)
@@ -90,8 +90,11 @@ class OnlineBrief24API:
         except Exception as e:
             return f"Error: Exception as {e}"
     
-    def send_letter(self, pdf_filename, mode='live'):
+    def send_letter(self, pdf_filename, mode='live', color=False, duplex=False):
         pdf_data = self.open_pdf(pdf_filename)
+        if pdf_data is None: # just to be extra sure...
+            print('ERROR: Could not read PDF file.')
+            return
         base64_encoded = self.base64_encode(pdf_data)
         md5_checksum = self.md5_checksum(base64_encoded)
 
@@ -102,20 +105,17 @@ class OnlineBrief24API:
                 "base64_file_checksum": md5_checksum,
                 "filename_original": os.path.basename(pdf_filename),
                 "specification": {
-                    "color": "1",
-                    "mode": "simplex",
+                    "color": "4" if color else "1",
+                    "mode": "duplex" if duplex else "simplex",
                     "shipping": "auto"
                 }
             }
         }
+
         
         payload['auth']['mode'] = mode
-        
-        try:
-            response = requests.post(f"{self.base_url}/printjobs", json=payload)
-        except Exception as e:
-            print(f"Error: Exception: {e}")
-            return response.json()
+        url = self.base_url + '/printjobs'
+        response = self.request('post', url, payload)
 
         if response.status_code == 200:
             print(f'Letter submitted successfully.')
@@ -127,73 +127,139 @@ class OnlineBrief24API:
             print(f'OnlineBrief24 remaining balance: {self.balance()} EUR')
            
         else:
-            print(f'Response status code: {response.status_code}')
-            return response.json()
+            print(f'Response status code: {response.status_code} - {response.text}')
 
     def list_printjobs(self, filter='all'):
         url = self.base_url + '/printjobs'
         match filter :
             case 'all':
-                print('filter: all')
+                pass
             case 'hold': # angehaltene Auftraege
-                print('filter: hold')
                 url += '?filter=hold'
             case 'done': # verarbeitete Auftraege
-                print('filter: done')
                 url += '?filter=done'
             case 'draft': # Aufträge im Warenkorb
-                print('filter: draft')
                 url += '?filter=draft'
             case 'queue': # Aufträge in der Warteschlange
-                print('filter: queue')
                 url += '?filter=queue'
             case 'canceled': # Aufträge in der Warteschlange
-                print('filter: canceled')
                 url += '?filter=canceled'
             case _:
                 print(f'ERROR: unrecognized filter: {filter}')
             
-        response = self.request_get(url, self.payload_auth)
+        response = self.request('get', url, self.payload_auth)
         return response.json()['data']['printjobs']
 
 
     def delete_printjob(self, id): # int
         url = self.base_url + f'/printjobs/{id}'
-        try:
-            response = requests.delete(url, json=self.payload_auth)
-        except Exception as e:
-            print(f"Error: Exception: {e}")
-            return response.json()
+        response = self.request('delete', url, self.payload_auth)
         return response.json()
 
     def transactions(self, filter='payins'):
         url = self.base_url + f'/transactions?{filter}'
-        response = self.request_get(url, self.payload_auth)
-        return response
+        response = self.request('get', url, self.payload_auth)
+        return response.json()['data']['transactions']
 
 def main():
-    parser = argparse.ArgumentParser(description='OnlineBrief24 CLI Tool')
+    parser = argparse.ArgumentParser(
+        description='Send letters and manage printjobs via OnlineBrief24 CLI Tool',
+        prog = 'ob24'
+    )
 
     subparsers = parser.add_subparsers(dest='command', required=True)
 
     send_parser = subparsers.add_parser('send', help = 'Send a letter')
     send_parser.add_argument('filename', help='PDF file to send')
     send_parser.add_argument('-m', '--mode', choices=['live', 'test'], default='live', help='use test for debug')
+    send_parser.add_argument('--color', action='store_true', help=' Enable color printing. (Default is b&w)')
+
+    send_parser.add_argument('--duplex', action='store_true', help='Enable duplex printing. (Default is simplex)')
+
+
+
+
 
     balance_parser = subparsers.add_parser('balance', help='Print balance')
-    invoices_parser = subparsers.add_parser('invoices', help='List invoices')
 
+    invoices_parser = subparsers.add_parser('invoices',  help='List/Download invoices')
+    invoices_subparsers = invoices_parser.add_subparsers(dest='invoices_command', required=True)
+
+    invoices_list = invoices_subparsers.add_parser('list', help='List invoices')
+    invoices_list.add_argument(
+        '-n', '--number',
+        type = int,
+        default = None,
+        help = 'Only show the last N invocies'
+    )
+
+    invoices_get = invoices_subparsers.add_parser('get', help='Download invoice')
+    invoices_get.add_argument(
+        'id',
+        type=int,
+        help='Invoice ID to download'
+    )
+    
+    printjobs_parser = subparsers.add_parser('printjobs', help='List/Delete print jobs')
+    printjobs_subparsers = printjobs_parser.add_subparsers(dest = 'printjobs_command', required=True)
+
+    printjobs_list = printjobs_subparsers.add_parser('list', help='List printjobs')
+    printjobs_list.add_argument(
+        '-f', '--filter',
+        choices=['all', 'hold', 'done', 'draft', 'queue', 'canceled'],
+        default='all',
+        help='Filter prinjobs by status'
+    )
+
+    printjobs_delete = printjobs_subparsers.add_parser('delete', help = 'Delete a printjob')
+    printjobs_delete.add_argument('id', type=int, help = 'Printjob ID to delete')
+
+
+    transactions_parser = subparsers.add_parser('transactions', help='List account transactions')
+    # payouts not supported yet
+    #transactions_parser.add_argument(
+    #    '-f', '--filter',
+    #    default = 'payins',
+    #    choices=['payins', 'payouts', 'all'],
+    #    help='Filter transactions (default: payins)'
+    #)
 
     args = parser.parse_args()
 
     if args.command == 'balance':
         print(f'OnlineBrief24 remaining balance: {api.balance()} EUR')
 
-    elif args.command == 'invoices':
-        print(api.list_invoices())
+    elif args.command == 'send':
+        api.send_letter(
+            args.filename,
+            mode=args.mode,
+            color=args.color,
+            duplex=args.duplex
+        )
 
-    #if args.t:
-    #    print(f'{json.dumps(api.transactions().json(), indent=2)}')
+
+    elif args.command == 'invoices':
+        if args.invoices_command == 'list':
+            invoices = api.list_invoices()
+            if args.number:
+                invoices = invoices[:args.number]
+            print(json.dumps(invoices, indent=2))
+        elif args.invoices_command == 'get':
+            api.get_invoice(args.id)
+
+    elif args.command == 'printjobs':
+        if args.printjobs_command == 'list':
+            jobs = api.list_printjobs(filter=args.filter)
+            print(json.dumps(jobs, indent=2))
+
+        elif args.printjobs_command == 'delete':
+            result = api.delete_printjob(args.id)
+            print(json.dumps(result, indent=2))
+
+    elif args.command == 'transactions':
+        transactions = api.transactions()
+        print(json.dumps(transactions, indent=2))
+
 
 if __name__ == '__main__':
     api = OnlineBrief24API()
