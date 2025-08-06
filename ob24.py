@@ -111,7 +111,6 @@ class OnlineBrief24API:
                 }
             }
         }
-
         
         payload['auth']['mode'] = mode
         url = self.base_url + '/printjobs'
@@ -166,13 +165,13 @@ def main():
         prog = 'ob24',
         description= """
 Send letters and manage printjobs via OnlineBrief24 CLI Tool
+
 Examples:
-  ob24 <command> -h
   ob24 send my_letter.pdf --color --duplex (default: b&w, simplex)
   ob24 balance 
   ob24 invoices list --last 3 (default: all)
-  ob24 printjobs list -f draft
-  ob24 printjobs delete <id>
+
+Use 'ob24 <command> -h for details.'
 """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
@@ -194,16 +193,15 @@ Examples:
     send_parser.add_argument('filename', help='PDF file to send')
     send_parser.add_argument('-m', '--mode', choices=['live', 'test'], default='live', help='use test for debug')
     send_parser.add_argument('--color', action='store_true', help=' Enable color printing. (Default is b&w)')
-
     send_parser.add_argument('--duplex', action='store_true', help='Enable duplex printing. (Default is simplex)')
-
-
-
-
 
     balance_parser = subparsers.add_parser('balance', help='Print balance')
 
-    invoices_parser = subparsers.add_parser('invoices',  help='List/Download invoices')
+    invoices_parser = subparsers.add_parser(
+        'invoices',
+        help='List or Download invoices',
+        description='Use: ob24 invoices list -h for additional help',
+    )
     invoices_subparsers = invoices_parser.add_subparsers(dest='invoices_command', required=True)
 
     invoices_list = invoices_subparsers.add_parser('list', help='List invoices')
