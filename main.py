@@ -39,44 +39,6 @@ class OnlineBrief24API:
                 }
         }
 
-    def request_get(self, url, payload):
-        """ DRY: try/except in separate method for looking tidy"""
-        try:
-            response = requests.get(url, json=payload)
-            if response.status_code == 200:
-                return response
-            else:
-                print(f'ERROR: {response.status_code}')
-        except Exception as e:
-            print(f'request_get: ERROR: {e}')
-            return response.json()
-
-    def balance(self):
-        url = self.base_url + '/balance'
-        response = self.request_get(url, self.payload_auth)
-        return f"Balance: {response.json()['data']['balance']} EUR"
-
-    def list_invoices(self):
-        url = self.base_url + '/invoices'
-        response = self.request_get(url, self.payload_auth)
-        invoices = response.json()['data']['invoices']
-        for inv in invoices:
-            print(f"id: {inv['id']}, invoice date: {inv['invoice_date'].split(' ')[0]}")
-
-    def get_invoice(self, invoice_id):
-        url = self.base_url + f'/invoices/{invoice_id}'
-        response = self.request_get(url, self.payload_auth)
-        invoice_date = response.json()['data']['invoice_date'].split(' ')[0]
-        base64_data = response.json()['data']['base64_data']
-        pdf_data = base64.b64decode(base64_data)
-        pdf_filename = f"ob24-Rechnung-{invoice_date}.pdf"
-        try:
-            with open(pdf_filename, "wb") as file:
-                file.write(pdf_data)
-                print(f'Invoice successfully saved: {pdf_filename}')
-        except Exception as e:
-            return f"Error: Exception as {e}"
-    
     def open_pdf(self, pdf_filename):
         try:
             with open(f'{pdf_filename}', 'rb') as file:
@@ -92,6 +54,42 @@ class OnlineBrief24API:
     def md5_checksum(self, base64_data):
         return hashlib.md5(base64_data.encode('utf-8')).hexdigest()
 
+    def request_get(self, url, payload):
+        """ DRY: try/except in separate method for looking tidy"""
+        try:
+            response = requests.get(url, json=payload)
+            if response.status_code == 200:
+                return response
+            else:
+                print(f'ERROR: {response.status_code}')
+                return response.json()
+        except Exception as e:
+            print(f'request_get: ERROR: {e}')
+
+    def balance(self):
+        url = self.base_url + '/balance'
+        response = self.request_get(url, self.payload_auth)
+        return response.json()['data']['balance']
+
+    def list_invoices(self):
+        url = self.base_url + '/invoices'
+        response = self.request_get(url, self.payload_auth)
+        return response.json()['data']['invoices']
+        
+    def get_invoice(self, invoice_id):
+        url = self.base_url + f'/invoices/{invoice_id}'
+        response = self.request_get(url, self.payload_auth)
+        invoice_date = response.json()['data']['invoice_date'].split(' ')[0]
+        base64_data = response.json()['data']['base64_data']
+        pdf_data = base64.b64decode(base64_data)
+        pdf_filename = f"ob24-Rechnung-{invoice_date}.pdf"
+        try:
+            with open(pdf_filename, "wb") as file:
+                file.write(pdf_data)
+                print(f'Invoice successfully saved: {pdf_filename}')
+        except Exception as e:
+            return f"Error: Exception as {e}"
+    
     def send_letter(self, pdf_filename, mode='live'):
         pdf_data = self.open_pdf(pdf_filename)
         base64_encoded = self.base64_encode(pdf_data)
@@ -126,7 +124,7 @@ class OnlineBrief24API:
             print(f"Status: {items['status']}")
             print(f"Address: {items['address']}")
             print(f"Cost: {items['amount'] + items['vat']} EUR")
-            print(self.balance())
+            print(f'OnlineBrief24 remaining balance: {self.balance()} EUR')
            
         else:
             print(f'Response status code: {response.status_code}')
@@ -156,8 +154,7 @@ class OnlineBrief24API:
                 print(f'ERROR: unrecognized filter: {filter}')
             
         response = self.request_get(url, self.payload_auth)
-        data = response.json()['data']['printjobs']
-        return data
+        return response.json()['data']['printjobs']
 
 
     def delete_printjob(self, id): # int
@@ -175,7 +172,28 @@ class OnlineBrief24API:
         return response
 
 def main():
-    print(api.balance())
+    parser = argparse.ArgumentParser(description='OnlineBrief24 CLI Tool')
+
+    subparsers = parser.add_subparsers(dest='command', required=True)
+
+    send_parser = subparsers.add_parser('send', help = 'Send a letter')
+    send_parser.add_argument('filename', help='PDF file to send')
+    send_parser.add_argument('-m', '--mode', choices=['live', 'test'], default='live', help='use test for debug')
+
+    balance_parser = subparsers.add_parser('balance', help='Print balance')
+    invoices_parser = subparsers.add_parser('invoices', help='List invoices')
+
+
+    args = parser.parse_args()
+
+    if args.command == 'balance':
+        print(f'OnlineBrief24 remaining balance: {api.balance()} EUR')
+
+    elif args.command == 'invoices':
+        print(api.list_invoices())
+
+    #if args.t:
+    #    print(f'{json.dumps(api.transactions().json(), indent=2)}')
 
 if __name__ == '__main__':
     api = OnlineBrief24API()
