@@ -2,19 +2,8 @@
 # Helper script for onlinebrief24.de API
 # 2025-07-29
 
-""" check if the venv is activated 
-    if active venv, sys.prefix != sys.base_prefix """
-import sys
-if sys.prefix == sys.base_prefix:
-    print("ERROR: venv not activated")
-    sys.exit(1)
-
-""" check if .env file is present"""
 import os
-if not os.path.exists('.env'):
-    print('ERROR: .env file missing.')
-    sys.exit(1)
-
+import sys
 import argparse
 import base64
 import hashlib
@@ -160,34 +149,55 @@ class OnlineBrief24API:
         response = self.request('get', url, self.payload_auth)
         return response.json()['data']['transactions']
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog = 'ob24',
-        description= """
-Send letters and manage printjobs via OnlineBrief24 CLI Tool
+""" Epilog here because it looks neater... that argparse documentation is a bit of a ... """
 
+EPILOG = """\
 Examples:
   ob24 send my_letter.pdf --color --duplex (default: b&w, simplex)
-  ob24 balance 
   ob24 invoices list --last 3 (default: all)
+  ob24 balance 
+  ob24 printjobs delete <id>
 
-Use 'ob24 <command> -h for details.'
-""",
+Use 'ob24 <command> -h' for detailed help on a specific command.'
+"""
+
+api: OnlineBrief24API | None = None  # type hint for clarity
+
+def main():
+    global api
+
+    """ check if the venv is activated 
+        if active venv, sys.prefix != sys.base_prefix """
+    if sys.prefix == sys.base_prefix:
+        print("ERROR: venv not activated")
+        sys.exit(1)
+
+    """ check if .env file is present"""
+    if not os.path.exists('.env'):
+        print('ERROR: .env file missing.')
+        sys.exit(1)
+
+    api = OnlineBrief24API()
+
+    parser = argparse.ArgumentParser(
+        prog = 'ob24',
+        usage = 'ob24 <command> [<args>] [-h|--help]',
+        epilog = EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter
-        )
+    )
 
     subparsers = parser.add_subparsers(
-        title='Availabe commands',
+        title='Available commands',
+        metavar='<command>',
         dest='command',
         required=True,
-        metavar = ''
     )
 
     send_parser = subparsers.add_parser(
         'send',
         help = 'Send a letter',
         description='Send a PDF letter via OnlineBrief24.de',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        #formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     send_parser.add_argument('filename', help='PDF file to send')
@@ -202,7 +212,11 @@ Use 'ob24 <command> -h for details.'
         help='List or Download invoices',
         description='Use: ob24 invoices list -h for additional help',
     )
-    invoices_subparsers = invoices_parser.add_subparsers(dest='invoices_command', required=True)
+    invoices_subparsers = invoices_parser.add_subparsers(
+        dest='invoices_command',
+        required=True,
+        metavar='subcommand (list|get)'
+    )
 
     invoices_list = invoices_subparsers.add_parser('list', help='List invoices')
     invoices_list.add_argument(
@@ -243,6 +257,10 @@ Use 'ob24 <command> -h for details.'
     #    help='Filter transactions (default: payins)'
     #)
 
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+    
     args = parser.parse_args()
 
     if args.command == 'balance':
@@ -255,7 +273,6 @@ Use 'ob24 <command> -h for details.'
             color=args.color,
             duplex=args.duplex
         )
-
 
     elif args.command == 'invoices':
         if args.invoices_command == 'list':
@@ -281,5 +298,4 @@ Use 'ob24 <command> -h for details.'
 
 
 if __name__ == '__main__':
-    api = OnlineBrief24API()
     main()
