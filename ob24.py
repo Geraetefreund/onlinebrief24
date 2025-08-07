@@ -8,10 +8,21 @@ import argparse
 import base64
 import hashlib
 import json
-import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    import requests
+except ModuleNotFoundError:
+    print("ERROR: Required package 'requests' is not installed.")
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print(f"ERROR: Required package 'python-dotenv' is not installed.")
+
+try:
+    load_dotenv()
+except NameError:
+    print("ERROR: Could not load '.env'")
 
 class OnlineBrief24API:
 
@@ -79,7 +90,7 @@ class OnlineBrief24API:
         except Exception as e:
             return f"Error: Exception as {e}"
     
-    def send_letter(self, pdf_filename, mode='live', color=False, duplex=False):
+    def send_letter(self, pdf_filename, mode=False, color=False, duplex=False):
         pdf_data = self.open_pdf(pdf_filename)
         if pdf_data is None: # just to be extra sure...
             print('ERROR: Could not read PDF file.')
@@ -101,7 +112,7 @@ class OnlineBrief24API:
             }
         }
         
-        payload['auth']['mode'] = mode
+        payload['auth']['mode'] = 'test' if mode else 'live'
         url = self.base_url + '/printjobs'
         response = self.request('post', url, payload)
 
@@ -157,31 +168,39 @@ Examples:
   ob24 invoices list --last 3 (default: all)
   ob24 balance 
   ob24 printjobs delete <id>
-
-Use 'ob24 <command> -h' for detailed help on a specific command.'
 """
 
+SEND_EPILOG = """\
+Examples:
+  ob24 send my_letter.pdf --color --test
+  ob24 send 'another letter.pdf' --duplex
+"""
+
+INVOICES_EPILOG = """\
+Examples:
+  ob24 invoices list --last 3
+"""
 api: OnlineBrief24API | None = None  # type hint for clarity
 
 def main():
     global api
 
-    """ check if the venv is activated 
-        if active venv, sys.prefix != sys.base_prefix """
+    """ check for venv 
+        if activated, sys.prefix != sys.base_prefix """
     if sys.prefix == sys.base_prefix:
-        print("ERROR: venv not activated")
-        sys.exit(1)
+        print("Warning: venv not activated.")
 
-    """ check if .env file is present"""
+    """ check for .env file """
     if not os.path.exists('.env'):
-        print('ERROR: .env file missing.')
+        print('ERROR: .env file missing!')
         sys.exit(1)
 
     api = OnlineBrief24API()
 
     parser = argparse.ArgumentParser(
         prog = 'ob24',
-        usage = 'ob24 <command> [<args>] [-h|--help]',
+        usage = 'ob24 <command> <args> [-h|--help]',
+        description = 'Python CLI wrapper for OnlineBrief24.de REST API.',
         epilog = EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -193,69 +212,98 @@ def main():
         required=True,
     )
 
+    """ SEND PARSER """
     send_parser = subparsers.add_parser(
         'send',
         help = 'Send a letter',
-        description='Send a PDF letter via OnlineBrief24.de',
-        #formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        usage = 'ob24 send <filename> [--color] [--duplex] [--test] [-h|--help]',
+        description="Send a PDF letter via OnlineBrief24.de. Use '--mode test' for debug.",
+        epilog=SEND_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
-
     send_parser.add_argument('filename', help='PDF file to send')
-    send_parser.add_argument('-m', '--mode', choices=['live', 'test'], default='live', help='use test for debug')
     send_parser.add_argument('--color', action='store_true', help=' Enable color printing. (Default is b&w)')
     send_parser.add_argument('--duplex', action='store_true', help='Enable duplex printing. (Default is simplex)')
+    send_parser.add_argument('--test', action='store_true', help='For debug, letter will be held in draft.')
 
-    balance_parser = subparsers.add_parser('balance', help='Print balance')
+    """ BALANCE PARSER """
+    balance_parser = subparsers.add_parser(
+        'balance',
+        usage='ob24 balance',
+        description="Prints your OnlineBrief24 balance.",
+        help='Print balance'
+    )
 
+    """ INVOICES PARSER """
     invoices_parser = subparsers.add_parser(
         'invoices',
+        usage='ob24 invoices <subcommand> [-h|--help]',
         help='List or Download invoices',
-        description='Use: ob24 invoices list -h for additional help',
+        description='Invoice related commands. List or Download invoices.',
     )
     invoices_subparsers = invoices_parser.add_subparsers(
         dest='invoices_command',
+        metavar='<command>',
         required=True,
-        metavar='subcommand (list|get)'
     )
-
-    invoices_list = invoices_subparsers.add_parser('list', help='List invoices')
+    invoices_list = invoices_subparsers.add_parser(
+        'list',
+        usage='ob24 invoices list [--last INT]',
+        help='List invoices')
     invoices_list.add_argument(
         '-l', '--last',
         type = int,
         default = None,
-        help = 'Only show the last N invocies'
+        help = 'Only show the last INT invocies'
     )
+    invoices_get = invoices_subparsers.add_parser(
+        'get',
+        usage='ob24 invoices get <id>',
+        description='Download and save invoice.',
+        help='Download invoice')
 
-    invoices_get = invoices_subparsers.add_parser('get', help='Download invoice')
     invoices_get.add_argument(
         'id',
         type=int,
-        help='Invoice ID to download'
+        help='Invoice <id> to download'
     )
     
-    printjobs_parser = subparsers.add_parser('printjobs', help='List/Delete print jobs')
-    printjobs_subparsers = printjobs_parser.add_subparsers(dest = 'printjobs_command', required=True)
+    """ PRINTJOBS PARSER """ 
+    printjobs_parser = subparsers.add_parser(
+        'printjobs',
+        usage='ob24 printjobs <subcommand> [-h|--help]',
+        help='List/Delete print jobs')
 
-    printjobs_list = printjobs_subparsers.add_parser('list', help='List printjobs')
+    printjobs_subparsers = printjobs_parser.add_subparsers(
+        dest='printjobs_command',
+        metavar='<subcommand>',
+        required=True)
+
+    printjobs_list = printjobs_subparsers.add_parser(
+        'list',
+        description='List all printjobs. Filter output optionally by keyword.',
+        usage='ob24 printjobs list [-f|--filter {hold, done, draft, queue, canceled}] [-h|--help]',
+        help='List printjobs'
+    )
     printjobs_list.add_argument(
         '-f', '--filter',
         choices=['all', 'hold', 'done', 'draft', 'queue', 'canceled'],
         default='all',
-        help='Filter prinjobs by status'
+        help='Filter printjobs by status.'
     )
-
-    printjobs_delete = printjobs_subparsers.add_parser('delete', help = 'Delete a printjob')
+    printjobs_delete = printjobs_subparsers.add_parser(
+        'delete',
+        usage='ob24 printjobs delete <id> [-h|--help]',
+        help = 'Delete a printjob <id>'
+    )
     printjobs_delete.add_argument('id', type=int, help = 'Printjob ID to delete')
 
-
-    transactions_parser = subparsers.add_parser('transactions', help='List account transactions')
-    # payouts not supported yet
-    #transactions_parser.add_argument(
-    #    '-f', '--filter',
-    #    default = 'payins',
-    #    choices=['payins', 'payouts', 'all'],
-    #    help='Filter transactions (default: payins)'
-    #)
+    """ TRANSACTIONS PARSER """ 
+    transactions_parser = subparsers.add_parser(
+        'transactions',
+        usage='ob24 transactions [-h|--help]',
+        description='List all account transactions. Payins/Payouts.',
+        help='List account transactions')
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -269,7 +317,7 @@ def main():
     elif args.command == 'send':
         api.send_letter(
             args.filename,
-            mode=args.mode,
+            mode=args.test,
             color=args.color,
             duplex=args.duplex
         )
