@@ -1,19 +1,30 @@
-# OnlineBrief24 Wrapper
+# OnlineBrief24 CLI
 
-Python CLI wrapper for onlinebrief24.de REST API.
- - send letters
- - show balance
- - list/download invoices
- - list/delete printjobs
- - list account transactions (payins/payouts)
+A Python command-line tool for sending letters via the [OnlineBrief24](https://www.onlinebrief24.de) service.  
 
-## Requirements:
- * .env file with credentials
- * requirements.txt
+## Features 
+ - Authenticate with OnlineBrief24 using credentials stored in `.env`
+ - Send PDF letters directly from the command line
+ - Check print jobs and account balance
+ - Simple CLI interface with clear arguments
+ - Designed to be extended for automation (i.e, cron, scripts, makefiles)
+
+## Getting Started
+
+### Requirements:
+ - Python 3.11+
+ - `pip` for dependency installation
+ - An active [OnlineBrief24](https://www.onlinebrief24.de) account
+
+### Installation
+
+ - clone the repo
+ - create and activate venv: `python3 -m venv venv`
+ - install dependencies: `pip3 install -r requirements.txt`
 
 
 ### Usage
-~~~
+```sh
 usage: ob24 <command> [<args>] [-h|--help]
 
 options:
@@ -34,12 +45,23 @@ Examples:
   ob24 printjobs delete <id>
 
 Use 'ob24 <command> -h' for detailed help on a specific command.'
-~~~
+```
 
 ### .env file
-Please make sure to .gitignore your secrets.
+Create a `.env` file in the project root:
 
-~~~
-API_KEY="{your api key}"
-API_SECRET="{your api secret}"
-~~~
+```sh
+API_KEY="your OnlineBrief24 API key"
+API_SECRET="your OnlineBrief24 API secret"
+```
+Never comit `.env` files with reald credentials. They are ignored by `.gitignore`.
+
+## Development
+ - Code written in Python and structured for easy extension.
+ - Functionality split into API client & CLI logic for scalability.
+ - Uses `.env` for credential management.
+
+## Future Improvements
+ - Add tests (mocking API responses)
+ - Add better error handling and logging
+
