@@ -19,7 +19,7 @@ A Python command-line tool for sending letters via the [OnlineBrief24](https://w
 ### Installation
 
  - clone the repo
- - create and activate venv: `python3 -m venv venv`
+ - create and activate venv: `python3 -m venv venv && source venv/bin/activate`
  - install dependencies: `pip3 install -r requirements.txt`
 
 
@@ -58,10 +58,10 @@ Never comit `.env` files with reald credentials. They are ignored by `.gitignore
 
 ## Development
  - Code written in Python and structured for easy extension.
- - Functionality split into API client & CLI logic for scalability.
  - Uses `.env` for credential management.
 
 ## Future Improvements
+ - Functionality split into API client & CLI logic for scalability.
  - Add tests (mocking API responses)
  - Add better error handling and logging
 
